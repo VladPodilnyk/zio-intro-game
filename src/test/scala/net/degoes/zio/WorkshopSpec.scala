@@ -1,9 +1,11 @@
 package net.degoes.zio
 
+import zio.ZIO
+import zio.duration._
 import zio.test._
 import zio.test.environment._
 import zio.test.Assertion._
-import zio.test.TestAspect.ignore
+import zio.test.TestAspect.{ignore, timeout}
 
 object WorkshopSpec
     extends DefaultRunnableSpec({
@@ -17,7 +19,16 @@ object WorkshopSpec
             output <- TestConsole.output
           } yield
             assert(value, equalTo(0)) &&
-              assert(output, equalTo(Vector("Hello World!")))
+              assert(output, equalTo(Vector("Hello World!\n")))
+        },
+        testM("ErrorRecovery") {
+          assertM(ErrorRecovery.run(Nil), equalTo(1))
+        },
+        testM("PromptName") {
+          ZIO(assertCompletes)
+        } @@ ignore,
+        testM("AlarmApp") {
+          ZIO(assertCompletes)
         } @@ ignore,
         suite("Board")(
           test("won horizontal first") {
