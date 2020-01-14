@@ -341,9 +341,8 @@ object AlarmAppImproved extends App {
 object ComputePi extends App {
   import zio.random._
   import zio.console._
-  import zio.clock._
-  import zio.duration._
-  import zio.stm._
+
+  import java.lang.Runtime.getRuntime
 
   /**
     * Some state to keep track of all points inside a circle,
@@ -379,7 +378,61 @@ object ComputePi extends App {
     * Build a multi-fiber program that estimates the value of `pi`. Print out
     * ongoing estimates continuously until the estimation is complete.
     */
-  def run(args: List[String]): ZIO[ZEnv, Nothing, Int] = ???
+  def run(args: List[String]): ZIO[ZEnv, Nothing, Int] = {
+    (for {
+      sampleSize <- readSampleSize(args)
+      cores      <- ZIO.effectTotal(getRuntime.availableProcessors())
+      state      <- initState
+      _          <- simulation(state, sampleSize, cores)
+      _          <- estimate(state, sampleSize)
+    } yield ()).foldM(
+      err => putStrLn(err.getMessage) as 1,
+      _ => ZIO.succeed(0)
+    )
+  }
+
+  private def simulation(state: PiState, sampleSize: Int, numOfCores: Int) = {
+    val jobs     = sampleSize / numOfCores
+    val jobsLeft = sampleSize % numOfCores
+    ZIO.collectAllPar(job(state, jobsLeft) :: List.fill(numOfCores)(job(state, jobs))).unit
+  }
+
+  private def job(state: PiState, sampleSize: Int): ZIO[Console with Random, Nothing, Unit] = {
+    if (sampleSize != 0)
+      addSample(state) *> estimate(state, sampleSize) *> job(state, sampleSize - 1)
+    else
+      ZIO.unit
+  }
+
+  private def addSample(state: PiState) = {
+    for {
+      point <- randomPoint
+      _     <- state.inside.update(n => if (insideCircle(point._1, point._2)) n + 1 else n)
+      _     <- state.total.update(_ + 1)
+    } yield ()
+  }
+
+  private def estimate(state: PiState, sampleSize: Int) = {
+    for {
+      inside <- state.inside.get
+      total  <- state.total.get
+      _      <- putStrLn(s"Estimate of pi for sample size = $sampleSize is ${estimatePi(inside, total)}")
+    } yield ()
+  }
+
+  private def readSampleSize(args: List[String]): IO[IllegalArgumentException, Int] = {
+    args.headOption.fold[IO[IllegalArgumentException, Int]](ZIO.fail(new IllegalArgumentException("No arguments given"))) {
+      v =>
+        ZIO.effect(v.toInt).refineToOrDie[NumberFormatException]
+    }
+  }
+
+  private def initState: UIO[PiState] = {
+    for {
+      inside <- Ref.make(0L)
+      total  <- Ref.make(0L)
+    } yield PiState(inside, total)
+  }
 }
 
 object StmSwap extends App {
@@ -392,7 +445,7 @@ object StmSwap extends App {
     * Demonstrate the following code does not reliably swap two values in the
     * presence of concurrency.
     */
-  def exampleRef = {
+  def exampleRef: UIO[Int] = {
     def swap[A](ref1: Ref[A], ref2: Ref[A]): UIO[Unit] =
       for {
         v1 <- ref1.get
@@ -416,9 +469,15 @@ object StmSwap extends App {
     *
     * Using `STM`, implement a safe version of the swap function.
     */
-  def exampleStm = {
-    def swap[A](ref1: TRef[A], ref2: TRef[A]): UIO[Unit] =
-      ???
+  def exampleStm: UIO[Int] = {
+    def swap[A](ref1: TRef[A], ref2: TRef[A]): UIO[Unit] = {
+      (for {
+        v1 <- ref1.get
+        v2 <- ref2.get
+        _  <- ref1.set(v2)
+        _  <- ref2.set(v1)
+      } yield ()).commit
+    }
 
     for {
       ref1   <- TRef.make(100).commit
