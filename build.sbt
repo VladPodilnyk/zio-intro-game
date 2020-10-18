@@ -1,18 +1,16 @@
-val ZIOVersion = "1.0.0-RC17"
+val ZIOVersion = "1.0.1"
 
 lazy val root = project
   .in(file("."))
   .settings(
     name := "zio-intro-game",
     organization := "net.degoes",
-    scalaVersion := "2.12.8",
+    scalaVersion := "2.12.11",
     initialCommands in Compile in console :=
       """|import zio._
          |import zio.console._
          |import zio.duration._
-         |object replRTS extends DefaultRuntime {}
-         |import replRTS._
-         |implicit class RunSyntax[R >: ZEnv, E, A](io: ZIO[R, E, A]){ def unsafeRun: A = replRTS.unsafeRun(io) }
+         |implicit class RunSyntax[R >: ZEnv, E, A](io: ZIO[R, E, A]){ def unsafeRun: A = Runtime.default.unsafeRun(io) }
     """.stripMargin
   )
 
@@ -24,10 +22,12 @@ addCommandAlias(
 
 libraryDependencies ++= Seq(
   // ZIO
-  "dev.zio" %% "zio" % ZIOVersion,
-  "dev.zio" %% "zio-streams" % ZIOVersion,
-  "dev.zio" %% "zio-test" % ZIOVersion % "test",
-  "dev.zio" %% "zio-test-sbt" % ZIOVersion % "test"
+  "dev.zio" %% "zio"          % ZIOVersion,
+  "dev.zio" %% "zio-streams"  % ZIOVersion,
+  "dev.zio" %% "zio-test"     % ZIOVersion % "test",
+  "dev.zio" %% "zio-test-sbt" % ZIOVersion % "test",
+  // URL parsing
+  "io.lemonlabs" %% "scala-uri" % "1.4.1"
 )
 
 testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework"))
